@@ -2,7 +2,7 @@
 //  api.js — Cliente con timeout en todas las peticiones
 // ============================================================
 
-const PROD_API_URL = "https://TU-APP.onrender.com"; // ← editar tras deploy
+const PROD_API_URL = "https://telemetria-iot-api.onrender.com";
 
 const API_BASE =
   window.location.hostname === "localhost" ||
