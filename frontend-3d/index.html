@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulación 3D · Monitoreo de pacientes</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="scene-container"></div>
+
+  <!-- REDISEÑO: ayuda de controles flotando sobre la escena (antes estaba al fondo del panel) -->
+  <div id="controls-hint">
+    <span><b>Arrastrar</b> rotar</span>
+    <span><b>Rueda</b> zoom</span>
+    <span><b>Clic derecho</b> mover</span>
+  </div>
+
+  <aside id="hud">
+    <!-- REDISEÑO: cabecera con título nuevo + estado de conexión arriba -->
+    <header class="hud-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" /><path d="m3 7 9 5 9-5M12 12v10" />
+          </svg>
+        </div>
+        <div>
+          <h1>Simulación 3D</h1>
+          <p class="subtitle">Monitoreo de pacientes · Domicilio</p>
+        </div>
+      </div>
+      <p id="api-status" class="api-status">Conectando…</p>
+    </header>
+
+    <section class="card alerts-card">
+      <div class="card-head">
+        <h3>Requieren supervisión</h3>
+        <span id="alerts-count" class="badge">0</span>
+      </div>
+      <p id="alerts-empty" class="alerts-empty">✓ Todos los pacientes estables</p>
+      <ul id="alerts-list"></ul>
+    </section>
+
+    <section class="patient-block">
+      <label class="field-label" for="patient-select">Paciente en foco</label>
+      <select id="patient-select"></select>
+      <h2 id="patient-name">—</h2>
+      <p id="patient-diagnostico" class="diagnostico">—</p>
+    </section>
+
+    <!-- REDISEÑO: signos en tarjetas 2×2 -->
+    <section class="vitals">
+      <div class="vital">
+        <div class="vital-top"><span class="vital-label">SpO₂</span><span id="spo2-pill" class="pill">--</span></div>
+        <div class="vital-main"><span id="spo2" class="vital-value">--</span><span class="vital-unit">%</span></div>
+      </div>
+      <div class="vital">
+        <div class="vital-top"><span class="vital-label">Frec. cardíaca</span><span id="fc-pill" class="pill">--</span></div>
+        <div class="vital-main"><span id="fc" class="vital-value">--</span><span class="vital-unit">bpm</span></div>
+      </div>
+      <div class="vital">
+        <div class="vital-top"><span class="vital-label">Frec. respiratoria</span><span id="fr-pill" class="pill">--</span></div>
+        <div class="vital-main"><span id="fr" class="vital-value">--</span><span class="vital-unit">rpm</span></div>
+      </div>
+      <div class="vital">
+        <div class="vital-top"><span class="vital-label">Temperatura</span><span id="temp-pill" class="pill">--</span></div>
+        <div class="vital-main"><span id="temp" class="vital-value">--</span><span class="vital-unit">°C</span></div>
+      </div>
+    </section>
+
+    <!-- REDISEÑO: estado general + última medición juntos, al final del panel -->
+    <section class="status-card">
+      <div class="status-info">
+        <span class="status-title">Estado general</span>
+        <span class="status-time">Última medición: <span id="last-update">--</span></span>
+      </div>
+      <span id="status-value" class="status-pill">--</span>
+    </section>
+  </aside>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
