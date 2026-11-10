@@ -1,5 +1,6 @@
 // ============================================================
 //  main.js — Polling robusto + refresh de pacientes
+//  + NUEVO: Sistema de alertas sonoras (Web Audio API)
 // ============================================================
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -14,10 +15,13 @@ import { buildRoom } from "./room.js";
 import { buildPatient } from "./patient.js";
 import { buildEquipment } from "./equipment.js";
 import { buildMonitor } from "./monitor.js";
-import { ROOM } from "./layout.js"; // REDISEÑO: medidas de la habitación para limitar la cámara
+import { ROOM } from "./layout.js";
 
 const POLL_INTERVAL_MS = 5000;
 const REFRESH_PATIENTS_MS = 30000;
+
+// ---------- NUEVO: constantes del sistema de sonido ----------
+const SOUND_COOLDOWN_MS = 12000;  // no repetir sonido antes de 12s
 
 const state = {
   pacientesCache: [],
@@ -28,14 +32,181 @@ const state = {
   lastError: null,
 };
 
-// ---------- Escena ----------
+// ---------- NUEVO: estado del sistema de sonido ----------
+const audio = {
+  ctx: null,
+  enabled: false,
+  seenAlertIds: new Set(),
+  lastSoundAt: 0,
+  firstLoadDone: false,
+};
+
+// ============================================================
+//  SISTEMA DE AUDIO (Web Audio API)
+// ============================================================
+
+function initAudioContext() {
+  if (audio.ctx) {
+    if (audio.ctx.state === "suspended") audio.ctx.resume();
+    return;
+  }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) {
+    console.warn("Web Audio API no soportada en este navegador");
+    return;
+  }
+  audio.ctx = new Ctx();
+}
+
+/**
+ * Reproduce un tono.
+ * @param {number} freq - Frecuencia en Hz
+ * @param {number} duration - Duración en segundos
+ * @param {string} type - 'sine' | 'square' | 'triangle' | 'sawtooth'
+ * @param {number} when - Retardo en segundos (desde ahora)
+ * @param {number} gainValue - Volumen 0..1
+ */
+function playTone(freq, duration, type = "sine", when = 0, gainValue = 0.25) {
+  if (!audio.ctx || !audio.enabled) return;
+  const osc = audio.ctx.createOscillator();
+  const gain = audio.ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.value = 0;
+  osc.connect(gain);
+  gain.connect(audio.ctx.destination);
+
+  const t = audio.ctx.currentTime + when;
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(gainValue, t + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+  osc.start(t);
+  osc.stop(t + duration);
+}
+
+/** Alerta crítica (rojo): 3 beeps agudos y urgentes */
+function playCriticalSound() {
+  playTone(880, 0.18, "square", 0, 0.22);
+  playTone(880, 0.18, "square", 0.22, 0.22);
+  playTone(880, 0.18, "square", 0.44, 0.22);
+}
+
+/** Alerta de precaución (naranja): 2 tonos suaves */
+function playWarningSound() {
+  playTone(523, 0.22, "sine", 0, 0.18);
+  playTone(523, 0.22, "sine", 0.32, 0.18);
+}
+
+// ============================================================
+//  DETECCIÓN DE ALERTAS NUEVAS + TOASTS
+// ============================================================
+
+/** Devuelve solo las alertas que no habíamos visto antes. */
+function getNewAlerts(alerts) {
+  // En la primera carga silenciosa, solo llenamos el set
+  if (!audio.firstLoadDone) {
+    alerts.forEach((a) => audio.seenAlertIds.add(a.id));
+    audio.firstLoadDone = true;
+    return [];
+  }
+  const newOnes = alerts.filter((a) => !audio.seenAlertIds.has(a.id));
+  alerts.forEach((a) => audio.seenAlertIds.add(a.id));
+  return newOnes;
+}
+
+/** Agrupa por paciente y prioriza tipo rojo. */
+function groupByPatient(alerts) {
+  const map = new Map();
+  alerts.forEach((a) => {
+    const existing = map.get(a.paciente_id);
+    if (!existing || (existing.tipo !== "rojo" && a.tipo === "rojo")) {
+      map.set(a.paciente_id, a);
+    }
+  });
+  return Array.from(map.values());
+}
+
+/** Muestra un toast flotante. */
+function showToast(alerta, paciente) {
+  const container = document.getElementById("toast-container");
+  const toast = document.createElement("div");
+  toast.className = `toast ${alerta.tipo}`;
+  const icon = alerta.tipo === "rojo" ? "🚨" : "⚠️";
+  const title = alerta.tipo === "rojo" ? "Alerta crítica" : "Precaución";
+  toast.innerHTML = `
+    <div class="toast-header">${icon} ${title}</div>
+    <div class="toast-patient">${paciente?.nombre || "Paciente"}</div>
+    <div class="toast-msg">${alerta.mensaje}</div>
+  `;
+
+  toast.addEventListener("click", () => {
+    if (paciente) {
+      const sel = document.getElementById("patient-select");
+      sel.value = paciente.id;
+      sel.dispatchEvent(new Event("change"));
+    }
+    toast.remove();
+  });
+
+  container.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add("show"));
+
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 350);
+  }, 6000);
+}
+
+/** Aplica la clase .new a las alertas recién aparecidas en el panel. */
+function highlightAlertsInPanel(pacienteIds) {
+  setTimeout(() => {
+    document.querySelectorAll("#alerts-list .alert-item").forEach((el) => {
+      const name = el.querySelector(".alert-name")?.textContent || "";
+      const isMatch = pacienteIds.some((pid) => {
+        const p = state.pacientesCache.find((x) => x.id === pid);
+        return p && name.includes(p.nombre);
+      });
+      if (isMatch) {
+        el.classList.add("new");
+        setTimeout(() => el.classList.remove("new"), 3500);
+      }
+    });
+  }, 50);
+}
+
+/** Maneja la reacción completa a las alertas nuevas. */
+function handleNewAlerts(newOnes) {
+  if (newOnes.length === 0) return;
+
+  const grouped = groupByPatient(newOnes);
+  const hasCritical = grouped.some((a) => a.tipo === "rojo");
+
+  // Sonido con cooldown
+  if (audio.enabled && Date.now() - audio.lastSoundAt >= SOUND_COOLDOWN_MS) {
+    audio.lastSoundAt = Date.now();
+    if (hasCritical) playCriticalSound();
+    else playWarningSound();
+  }
+
+  // Toast (máximo 2 a la vez para no saturar)
+  grouped.slice(0, 2).forEach((a) => {
+    const p = state.pacientesCache.find((x) => x.id === a.paciente_id);
+    showToast(a, p);
+  });
+
+  // Resaltar en el panel
+  highlightAlertsInPanel(grouped.map((a) => a.paciente_id));
+}
+
+// ============================================================
+//  Escena 3D (idéntico a lo que ya tenías)
+// ============================================================
 const container = document.getElementById("scene-container");
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0e14);
-// REDISEÑO: sin niebla (habitación cerrada)
 scene.fog = null;
 
-// REDISEÑO: FOV 50 y cámara inicial DENTRO de la habitación
 const camera = new THREE.PerspectiveCamera(
   50, window.innerWidth / window.innerHeight, 0.05, 200
 );
@@ -46,14 +217,12 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-// REDISEÑO: colores más naturales y cinematográficos
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 container.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-// REDISEÑO: la cámara mira hacia la cama / el monitor
 controls.target.set(-0.3, 1.0, -1.8);
 controls.enableDamping = true;
 controls.dampingFactor = 0.08;
@@ -67,8 +236,6 @@ controls.panSpeed = 0.8;
 controls.screenSpacePanning = true;
 controls.update();
 
-// REDISEÑO: la cámara y el punto de mira NUNCA salen de la habitación
-// (ni al girar, ni al hacer zoom, ni al mover con clic derecho)
 const MARGIN = 0.35;
 const camMin = new THREE.Vector3(-ROOM.W / 2 + MARGIN, 0.5, -ROOM.D / 2 + MARGIN);
 const camMax = new THREE.Vector3(ROOM.W / 2 - MARGIN, ROOM.H - 0.25, ROOM.D / 2 - MARGIN);
@@ -80,7 +247,6 @@ controls.addEventListener("change", () => {
   camera.lookAt(controls.target);
 });
 
-// REDISEÑO: iluminación suave y cálida (reemplaza ambient + fillLight azul)
 scene.add(new THREE.HemisphereLight(0xeaf2fb, 0x9b8b78, 0.9));
 
 const keyLight = new THREE.DirectionalLight(0xfff4e6, 1.2);
@@ -149,7 +315,7 @@ function updateHUD() {
     apiS.className = "api-status error";
   } else {
     apiS.textContent = "✓ Conectado a la API";
-    apiS.className = "api-status ok"; // REDISEÑO: ahora se ve en verde cuando hay conexión
+    apiS.className = "api-status ok";
   }
 }
 
@@ -159,7 +325,6 @@ function renderAlertsPanel() {
   const empty = document.getElementById("alerts-empty");
   const count = document.getElementById("alerts-count");
 
-  // Agrupar por paciente (1 entrada por paciente)
   const byPatient = new Map();
   state.alertasGlobales.forEach((a) => {
     if (!byPatient.has(a.paciente_id)) byPatient.set(a.paciente_id, a);
@@ -222,7 +387,6 @@ async function cargarPacientes() {
       sel.appendChild(opt);
     });
 
-    // Preservar selección si sigue existiendo
     const stillExists = pacientes.find((p) => p.id === currentId);
     const target = stillExists || pacientes[0];
     sel.value = target.id;
@@ -244,9 +408,30 @@ document.getElementById("patient-select").addEventListener("change", (e) => {
   }
 });
 
-// ---------- Polling robusto ----------
+// ---------- NUEVO: Botón de sonido ----------
+document.getElementById("sound-toggle").addEventListener("click", () => {
+  initAudioContext();
+  audio.enabled = !audio.enabled;
+
+  const btn = document.getElementById("sound-toggle");
+  btn.classList.toggle("on", audio.enabled);
+  btn.title = audio.enabled
+    ? "Sonido activado · clic para silenciar"
+    : "Activar sonido de alertas";
+  btn.setAttribute(
+    "aria-label",
+    audio.enabled ? "Silenciar alertas" : "Activar sonido de alertas"
+  );
+
+  // Confirmación sonora al activar
+  if (audio.enabled) {
+    playTone(660, 0.15, "sine", 0, 0.15);
+  }
+});
+
+// ---------- Polling ----------
 async function poll() {
-  // 1. PRIORIDAD: signos del paciente seleccionado
+  // 1. Signos del paciente seleccionado
   if (state.paciente) {
     try {
       const signos = await fetchSignos(state.paciente.id, 1);
@@ -272,15 +457,18 @@ async function poll() {
     }
   }
 
-  // 2. Alertas globales (no bloquea si falla)
+  // 2. Alertas globales (con detección de nuevas)
   try {
-    state.alertasGlobales = await fetchAllActiveAlerts();
+    const alerts = await fetchAllActiveAlerts();
+    const newOnes = getNewAlerts(alerts);   // NUEVO
+    state.alertasGlobales = alerts;
     renderAlertsPanel();
+    handleNewAlerts(newOnes);               // NUEVO: sonido + toast + highlight
   } catch (e) {
     console.warn("poll alertas:", e);
   }
 
-  // 3. Actualizar HUD siempre
+  // 3. HUD
   updateHUD();
 }
 
@@ -314,6 +502,6 @@ window.addEventListener("resize", () => {
   await cargarPacientes();
   await poll();
   setInterval(poll, POLL_INTERVAL_MS);
-  setInterval(cargarPacientes, REFRESH_PATIENTS_MS); // refrescar lista cada 30s
+  setInterval(cargarPacientes, REFRESH_PATIENTS_MS);
   animate();
 })();

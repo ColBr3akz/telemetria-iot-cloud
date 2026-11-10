@@ -22,7 +22,6 @@
 <body>
   <div id="scene-container"></div>
 
-  <!-- REDISEÑO: ayuda de controles flotando sobre la escena (antes estaba al fondo del panel) -->
   <div id="controls-hint">
     <span><b>Arrastrar</b> rotar</span>
     <span><b>Rueda</b> zoom</span>
@@ -30,7 +29,6 @@
   </div>
 
   <aside id="hud">
-    <!-- REDISEÑO: cabecera con título nuevo + estado de conexión arriba -->
     <header class="hud-header">
       <div class="brand">
         <div class="brand-icon">
@@ -43,7 +41,25 @@
           <p class="subtitle">Monitoreo de pacientes · Domicilio</p>
         </div>
       </div>
-      <p id="api-status" class="api-status">Conectando…</p>
+      <div class="header-actions">
+        <!-- NUEVO: Botón de sonido -->
+        <button id="sound-toggle" class="sound-toggle" title="Activar sonido de alertas" aria-label="Activar sonido de alertas">
+          <!-- Icono: campana con slash (silenciado) -->
+          <svg class="icon-bell-off" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            <path d="M18.63 13A17.89 17.89 0 0 1 18 8" />
+            <path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14" />
+            <path d="M18 8a6 6 0 0 0-9.33-5" />
+            <line x1="1" y1="1" x2="23" y2="23" />
+          </svg>
+          <!-- Icono: campana normal (activado) -->
+          <svg class="icon-bell-on" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+        </button>
+        <p id="api-status" class="api-status">Conectando…</p>
+      </div>
     </header>
 
     <section class="card alerts-card">
@@ -62,7 +78,6 @@
       <p id="patient-diagnostico" class="diagnostico">—</p>
     </section>
 
-    <!-- REDISEÑO: signos en tarjetas 2×2 -->
     <section class="vitals">
       <div class="vital">
         <div class="vital-top"><span class="vital-label">SpO₂</span><span id="spo2-pill" class="pill">--</span></div>
@@ -82,7 +97,6 @@
       </div>
     </section>
 
-    <!-- REDISEÑO: estado general + última medición juntos, al final del panel -->
     <section class="status-card">
       <div class="status-info">
         <span class="status-title">Estado general</span>
@@ -91,6 +105,9 @@
       <span id="status-value" class="status-pill">--</span>
     </section>
   </aside>
+
+  <!-- NUEVO: Contenedor de notificaciones flotantes (toasts) -->
+  <div id="toast-container"></div>
 
   <script type="module" src="js/main.js"></script>
 </body>
