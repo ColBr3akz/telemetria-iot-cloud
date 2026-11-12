@@ -10,7 +10,7 @@ from sqlmodel import Session
 
 from app.config import settings
 from app.database import engine
-from app.routers import alertas, pacientes, signos_vitales
+from app.routers import alertas, pacientes, signos_vitales, ai  # NUEVO: ai
 from app.services.simulator import simulator
 
 
@@ -28,7 +28,7 @@ app = FastAPI(
         "insuficiencia respiratoria. Reimplementación paralela del dominio "
         "en Supabase + FastAPI (proyecto de tesis intacto en Firebase)."
     ),
-    version="0.3.0",
+    version="0.4.0", # Versión actualizada
     lifespan=lifespan,
 )
 
@@ -43,6 +43,7 @@ app.add_middleware(
 app.include_router(pacientes.router)
 app.include_router(signos_vitales.router)
 app.include_router(alertas.router)
+app.include_router(ai.router) # NUEVO
 
 
 @app.get("/health", tags=["Sistema"])

@@ -19,9 +19,7 @@ import { ROOM } from "./layout.js";
 
 const POLL_INTERVAL_MS = 5000;
 const REFRESH_PATIENTS_MS = 30000;
-
-// ---------- NUEVO: constantes del sistema de sonido ----------
-const SOUND_COOLDOWN_MS = 12000;  // no repetir sonido antes de 12s
+const SOUND_COOLDOWN_MS = 12000;
 
 const state = {
   pacientesCache: [],
@@ -32,7 +30,6 @@ const state = {
   lastError: null,
 };
 
-// ---------- NUEVO: estado del sistema de sonido ----------
 const audio = {
   ctx: null,
   enabled: false,
@@ -44,28 +41,16 @@ const audio = {
 // ============================================================
 //  SISTEMA DE AUDIO (Web Audio API)
 // ============================================================
-
 function initAudioContext() {
   if (audio.ctx) {
     if (audio.ctx.state === "suspended") audio.ctx.resume();
     return;
   }
   const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) {
-    console.warn("Web Audio API no soportada en este navegador");
-    return;
-  }
+  if (!Ctx) return;
   audio.ctx = new Ctx();
 }
 
-/**
- * Reproduce un tono.
- * @param {number} freq - Frecuencia en Hz
- * @param {number} duration - Duración en segundos
- * @param {string} type - 'sine' | 'square' | 'triangle' | 'sawtooth'
- * @param {number} when - Retardo en segundos (desde ahora)
- * @param {number} gainValue - Volumen 0..1
- */
 function playTone(freq, duration, type = "sine", when = 0, gainValue = 0.25) {
   if (!audio.ctx || !audio.enabled) return;
   const osc = audio.ctx.createOscillator();
@@ -85,14 +70,12 @@ function playTone(freq, duration, type = "sine", when = 0, gainValue = 0.25) {
   osc.stop(t + duration);
 }
 
-/** Alerta crítica (rojo): 3 beeps agudos y urgentes */
 function playCriticalSound() {
   playTone(880, 0.18, "square", 0, 0.22);
   playTone(880, 0.18, "square", 0.22, 0.22);
   playTone(880, 0.18, "square", 0.44, 0.22);
 }
 
-/** Alerta de precaución (naranja): 2 tonos suaves */
 function playWarningSound() {
   playTone(523, 0.22, "sine", 0, 0.18);
   playTone(523, 0.22, "sine", 0.32, 0.18);
@@ -101,10 +84,7 @@ function playWarningSound() {
 // ============================================================
 //  DETECCIÓN DE ALERTAS NUEVAS + TOASTS
 // ============================================================
-
-/** Devuelve solo las alertas que no habíamos visto antes. */
 function getNewAlerts(alerts) {
-  // En la primera carga silenciosa, solo llenamos el set
   if (!audio.firstLoadDone) {
     alerts.forEach((a) => audio.seenAlertIds.add(a.id));
     audio.firstLoadDone = true;
@@ -115,7 +95,6 @@ function getNewAlerts(alerts) {
   return newOnes;
 }
 
-/** Agrupa por paciente y prioriza tipo rojo. */
 function groupByPatient(alerts) {
   const map = new Map();
   alerts.forEach((a) => {
@@ -127,7 +106,6 @@ function groupByPatient(alerts) {
   return Array.from(map.values());
 }
 
-/** Muestra un toast flotante. */
 function showToast(alerta, paciente) {
   const container = document.getElementById("toast-container");
   const toast = document.createElement("div");
@@ -158,7 +136,6 @@ function showToast(alerta, paciente) {
   }, 6000);
 }
 
-/** Aplica la clase .new a las alertas recién aparecidas en el panel. */
 function highlightAlertsInPanel(pacienteIds) {
   setTimeout(() => {
     document.querySelectorAll("#alerts-list .alert-item").forEach((el) => {
@@ -175,32 +152,28 @@ function highlightAlertsInPanel(pacienteIds) {
   }, 50);
 }
 
-/** Maneja la reacción completa a las alertas nuevas. */
 function handleNewAlerts(newOnes) {
   if (newOnes.length === 0) return;
 
   const grouped = groupByPatient(newOnes);
   const hasCritical = grouped.some((a) => a.tipo === "rojo");
 
-  // Sonido con cooldown
   if (audio.enabled && Date.now() - audio.lastSoundAt >= SOUND_COOLDOWN_MS) {
     audio.lastSoundAt = Date.now();
     if (hasCritical) playCriticalSound();
     else playWarningSound();
   }
 
-  // Toast (máximo 2 a la vez para no saturar)
   grouped.slice(0, 2).forEach((a) => {
     const p = state.pacientesCache.find((x) => x.id === a.paciente_id);
     showToast(a, p);
   });
 
-  // Resaltar en el panel
   highlightAlertsInPanel(grouped.map((a) => a.paciente_id));
 }
 
 // ============================================================
-//  Escena 3D (idéntico a lo que ya tenías)
+//  Escena 3D
 // ============================================================
 const container = document.getElementById("scene-container");
 const scene = new THREE.Scene();
@@ -408,7 +381,6 @@ document.getElementById("patient-select").addEventListener("change", (e) => {
   }
 });
 
-// ---------- NUEVO: Botón de sonido ----------
 document.getElementById("sound-toggle").addEventListener("click", () => {
   initAudioContext();
   audio.enabled = !audio.enabled;
@@ -423,7 +395,6 @@ document.getElementById("sound-toggle").addEventListener("click", () => {
     audio.enabled ? "Silenciar alertas" : "Activar sonido de alertas"
   );
 
-  // Confirmación sonora al activar
   if (audio.enabled) {
     playTone(660, 0.15, "sine", 0, 0.15);
   }
@@ -431,7 +402,6 @@ document.getElementById("sound-toggle").addEventListener("click", () => {
 
 // ---------- Polling ----------
 async function poll() {
-  // 1. Signos del paciente seleccionado
   if (state.paciente) {
     try {
       const signos = await fetchSignos(state.paciente.id, 1);
@@ -457,18 +427,16 @@ async function poll() {
     }
   }
 
-  // 2. Alertas globales (con detección de nuevas)
   try {
     const alerts = await fetchAllActiveAlerts();
-    const newOnes = getNewAlerts(alerts);   // NUEVO
+    const newOnes = getNewAlerts(alerts);
     state.alertasGlobales = alerts;
     renderAlertsPanel();
-    handleNewAlerts(newOnes);               // NUEVO: sonido + toast + highlight
+    handleNewAlerts(newOnes);
   } catch (e) {
     console.warn("poll alertas:", e);
   }
 
-  // 3. HUD
   updateHUD();
 }
 
@@ -495,6 +463,41 @@ window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ---------- NUEVO: Lógica del botón de Inteligencia Artificial ----------
+document.getElementById("btn-ai-summary").addEventListener("click", async () => {
+  if (!state.paciente) return alert("Selecciona un paciente primero");
+  
+  const btn = document.getElementById("btn-ai-summary");
+  const txt = document.getElementById("ai-summary-text");
+  const originalHtml = btn.innerHTML;
+
+  btn.innerHTML = `<span class="animate-pulse">Generando análisis...</span>`;
+  btn.disabled = true;
+  txt.classList.add("hidden");
+
+  try {
+    const baseUrl = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
+      ? "http://127.0.0.1:8000" 
+      : "https://telemetria-iot-api.onrender.com";
+
+    const res = await fetch(`${baseUrl}/ai/resumen/${state.paciente.id}`, {
+      method: "POST"
+    });
+    
+    if (!res.ok) throw new Error("Error en la API");
+    const data = await res.json();
+    
+    txt.textContent = data.resumen;
+    txt.classList.remove("hidden");
+  } catch (e) {
+    txt.textContent = "Hubo un error al conectar con el servicio de IA.";
+    txt.classList.remove("hidden");
+  } finally {
+    btn.innerHTML = originalHtml;
+    btn.disabled = false;
+  }
 });
 
 // ---------- Arranque ----------

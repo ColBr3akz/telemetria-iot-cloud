@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 
 from app.models import Alerta, Paciente, SignosVitales
 from app.schemas import SignosVitalesCreate
+from app.services.slack_service import enviar_alerta_slack  # NUEVO
 
 
 def evaluar_umbrales(paciente: Paciente, signo: SignosVitales) -> Optional[Alerta]:
@@ -88,6 +89,9 @@ def crear_signo_vital(
 
     if alerta:
         session.add(alerta)
+        # NUEVO: Enviar notificación a Slack si es una alerta crítica (roja)
+        if alerta.tipo == "rojo":
+            enviar_alerta_slack(paciente.nombre, alerta.mensaje)
 
     paciente.ultima_medicion = signo.fecha_registro
     paciente.estado = alerta.tipo if alerta else ("naranja" if _tiene_alerta_activa(session, paciente) else "verde")
