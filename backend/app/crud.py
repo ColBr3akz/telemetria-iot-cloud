@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from app.models import Alerta, Paciente, SignosVitales
 from app.schemas import SignosVitalesCreate
-from app.services.slack_service import enviar_alerta_slack  # NUEVO
+from app.services.slack_service import enviar_alerta_slack
 
 
 def evaluar_umbrales(paciente: Paciente, signo: SignosVitales) -> Optional[Alerta]:
@@ -62,9 +62,7 @@ def crear_signo_vital(
     solo_si_no_hay_alerta: bool = False,
 ) -> tuple[SignosVitales, Optional[Alerta]]:
     """
-    Crea un signo vital y, si cruza umbrales, crea una alerta.
-    Si `solo_si_no_hay_alerta=True`, no crea una nueva alerta cuando
-    el paciente ya tiene una activa (evita duplicados del simulador).
+    Crea un signo vital. Genera alerta si está mal, o resuelve las existentes si ya está bien.
     """
     paciente = session.get(Paciente, payload.paciente_id)
     if not paciente:
@@ -76,12 +74,12 @@ def crear_signo_vital(
 
     alerta = evaluar_umbrales(paciente, signo)
 
-    # Dedupe: si ya hay una alerta activa, no crear otra
+    # Dedupe
     if alerta and solo_si_no_hay_alerta:
         existente = session.exec(
             select(Alerta).where(
                 Alerta.paciente_id == paciente.id,
-                Alerta.resuelta == False,  # noqa: E712
+                Alerta.resuelta == False,
             )
         ).first()
         if existente:
@@ -89,9 +87,21 @@ def crear_signo_vital(
 
     if alerta:
         session.add(alerta)
-        # NUEVO: Enviar notificación a Slack si es una alerta crítica (roja)
         if alerta.tipo == "rojo":
             enviar_alerta_slack(paciente.nombre, alerta.mensaje)
+    else:
+        # NUEVO: Si el paciente está BIEN, resolver automáticamente cualquier alerta activa previa
+        alertas_activas = session.exec(
+            select(Alerta).where(
+                Alerta.paciente_id == paciente.id,
+                Alerta.resuelta == False,
+            )
+        ).all()
+        for a in alertas_activas:
+            a.resuelta = True
+            a.fecha_resolucion = datetime.now(timezone.utc)
+            session.add(a)
+            print(f"   ✅ Alerta resuelta automáticamente para {paciente.nombre}")
 
     paciente.ultima_medicion = signo.fecha_registro
     paciente.estado = alerta.tipo if alerta else ("naranja" if _tiene_alerta_activa(session, paciente) else "verde")
@@ -106,12 +116,11 @@ def crear_signo_vital(
 
 
 def _tiene_alerta_activa(session: Session, paciente: Paciente) -> bool:
-    """Utilidad interna: ¿el paciente tiene una alerta activa?"""
     return (
         session.exec(
             select(Alerta).where(
                 Alerta.paciente_id == paciente.id,
-                Alerta.resuelta == False,  # noqa: E712
+                Alerta.resuelta == False,
             )
         ).first()
         is not None

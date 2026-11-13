@@ -1,6 +1,5 @@
 // ============================================================
-//  main.js — Polling robusto + refresh de pacientes
-//  + NUEVO: Sistema de alertas sonoras (Web Audio API)
+//  main.js — Polling, Alertas, Audio y Gestión de Pacientes
 // ============================================================
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -21,6 +20,11 @@ const POLL_INTERVAL_MS = 5000;
 const REFRESH_PATIENTS_MS = 30000;
 const SOUND_COOLDOWN_MS = 12000;
 
+// URL dinámica según el entorno
+const BASE_URL = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+  ? "http://127.0.0.1:8000"
+  : "https://telemetria-iot-api.onrender.com";
+
 const state = {
   pacientesCache: [],
   paciente: null,
@@ -28,6 +32,7 @@ const state = {
   ultimoEstado: "verde",
   alertasGlobales: [],
   lastError: null,
+  sessionHistory: [], // NUEVO: Historial en memoria
 };
 
 const audio = {
@@ -39,7 +44,7 @@ const audio = {
 };
 
 // ============================================================
-//  SISTEMA DE AUDIO (Web Audio API)
+//  SISTEMA DE AUDIO
 // ============================================================
 function initAudioContext() {
   if (audio.ctx) {
@@ -82,7 +87,7 @@ function playWarningSound() {
 }
 
 // ============================================================
-//  DETECCIÓN DE ALERTAS NUEVAS + TOASTS
+//  DETECCIÓN DE ALERTAS Y HISTORIAL
 // ============================================================
 function getNewAlerts(alerts) {
   if (!audio.firstLoadDone) {
@@ -136,20 +141,19 @@ function showToast(alerta, paciente) {
   }, 6000);
 }
 
-function highlightAlertsInPanel(pacienteIds) {
-  setTimeout(() => {
-    document.querySelectorAll("#alerts-list .alert-item").forEach((el) => {
-      const name = el.querySelector(".alert-name")?.textContent || "";
-      const isMatch = pacienteIds.some((pid) => {
-        const p = state.pacientesCache.find((x) => x.id === pid);
-        return p && name.includes(p.nombre);
-      });
-      if (isMatch) {
-        el.classList.add("new");
-        setTimeout(() => el.classList.remove("new"), 3500);
-      }
-    });
-  }, 50);
+function renderSessionHistory() {
+  const list = document.getElementById("session-history-list");
+  if (state.sessionHistory.length === 0) return;
+
+  list.innerHTML = "";
+  state.sessionHistory.forEach((a) => {
+    const p = state.pacientesCache.find((x) => x.id === a.paciente_id);
+    const li = document.createElement("li");
+    li.className = "border-l-2 pl-2 py-1 " + (a.tipo === "rojo" ? "border-red-500" : "border-yellow-500");
+    const time = new Date().toLocaleTimeString("es-BO", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    li.innerHTML = `<span class="text-gray-500 text-[10px]">${time}</span> <b>${p?.nombre || "Paciente"}</b><br><span class="text-[10px] text-gray-400">${a.mensaje}</span>`;
+    list.appendChild(li);
+  });
 }
 
 function handleNewAlerts(newOnes) {
@@ -158,18 +162,26 @@ function handleNewAlerts(newOnes) {
   const grouped = groupByPatient(newOnes);
   const hasCritical = grouped.some((a) => a.tipo === "rojo");
 
+  // Añadir al historial de sesión
+  newOnes.forEach(a => {
+    if (!state.sessionHistory.find(x => x.id === a.id)) {
+      state.sessionHistory.unshift(a); // Los más nuevos arriba
+    }
+  });
+  renderSessionHistory();
+
+  // Sonido
   if (audio.enabled && Date.now() - audio.lastSoundAt >= SOUND_COOLDOWN_MS) {
     audio.lastSoundAt = Date.now();
     if (hasCritical) playCriticalSound();
     else playWarningSound();
   }
 
+  // Toasts
   grouped.slice(0, 2).forEach((a) => {
     const p = state.pacientesCache.find((x) => x.id === a.paciente_id);
     showToast(a, p);
   });
-
-  highlightAlertsInPanel(grouped.map((a) => a.paciente_id));
 }
 
 // ============================================================
@@ -178,11 +190,8 @@ function handleNewAlerts(newOnes) {
 const container = document.getElementById("scene-container");
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0e14);
-scene.fog = null;
 
-const camera = new THREE.PerspectiveCamera(
-  50, window.innerWidth / window.innerHeight, 0.05, 200
-);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.05, 200);
 camera.position.set(2.4, 1.9, 2.4);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -192,7 +201,6 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
 container.appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -203,11 +211,6 @@ controls.minDistance = 1.5;
 controls.maxDistance = 5.5;
 controls.maxPolarAngle = Math.PI * 0.52;
 controls.minPolarAngle = 0.35;
-controls.rotateSpeed = 0.7;
-controls.zoomSpeed = 0.9;
-controls.panSpeed = 0.8;
-controls.screenSpacePanning = true;
-controls.update();
 
 const MARGIN = 0.35;
 const camMin = new THREE.Vector3(-ROOM.W / 2 + MARGIN, 0.5, -ROOM.D / 2 + MARGIN);
@@ -221,28 +224,21 @@ controls.addEventListener("change", () => {
 });
 
 scene.add(new THREE.HemisphereLight(0xeaf2fb, 0x9b8b78, 0.9));
-
 const keyLight = new THREE.DirectionalLight(0xfff4e6, 1.2);
 keyLight.position.set(3, 2.8, 2.5);
-keyLight.target.position.set(-0.5, 0, -1.5);
 keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(2048, 2048);
-keyLight.shadow.camera.left = -5;
-keyLight.shadow.camera.right = 5;
-keyLight.shadow.camera.top = 5;
-keyLight.shadow.camera.bottom = -5;
-keyLight.shadow.camera.near = 0.5;
-keyLight.shadow.camera.far = 14;
 keyLight.shadow.bias = -0.0004;
-keyLight.shadow.normalBias = 0.02;
-scene.add(keyLight, keyLight.target);
+scene.add(keyLight);
 
 buildRoom(scene);
 const patient = buildPatient(scene);
 const equipment = buildEquipment(scene);
 const monitor = buildMonitor(scene, renderer);
 
-// ---------- HUD ----------
+// ============================================================
+//  HUD
+// ============================================================
 function setPill(id, sev) {
   const el = document.getElementById(id);
   el.className = `pill ${sev}`;
@@ -252,8 +248,7 @@ function setPill(id, sev) {
 function setStatus(valor) {
   const el = document.getElementById("status-value");
   el.className = `status-value ${valor}`;
-  el.textContent =
-    valor === "rojo" ? "CRÍTICO" : valor === "naranja" ? "PRECAUCIÓN" : "ESTABLE";
+  el.textContent = valor === "rojo" ? "CRÍTICO" : valor === "naranja" ? "PRECAUCIÓN" : "ESTABLE";
 }
 
 function updateHUD() {
@@ -262,8 +257,7 @@ function updateHUD() {
   if (!p) return;
 
   document.getElementById("patient-name").textContent = p.nombre;
-  document.getElementById("patient-diagnostico").textContent =
-    p.diagnostico || "—";
+  document.getElementById("patient-diagnostico").textContent = p.diagnostico || "—";
 
   if (s) {
     document.getElementById("spo2").textContent = s.spo2;
@@ -277,22 +271,15 @@ function updateHUD() {
     setPill("fr-pill", evaluarUmbral(u, "fr", s.frecuencia_respiratoria));
     setPill("temp-pill", evaluarUmbral(u, "temperatura", s.temperatura));
 
-    document.getElementById("last-update").textContent =
-      new Date(s.fecha_registro).toLocaleString("es-BO");
+    document.getElementById("last-update").textContent = new Date(s.fecha_registro).toLocaleString("es-BO");
   }
   setStatus(state.ultimoEstado);
 
   const apiS = document.getElementById("api-status");
-  if (state.lastError) {
-    apiS.textContent = `✗ ${state.lastError}`;
-    apiS.className = "api-status error";
-  } else {
-    apiS.textContent = "✓ Conectado a la API";
-    apiS.className = "api-status ok";
-  }
+  apiS.textContent = state.lastError ? `✗ ${state.lastError}` : "✓ Conectado";
+  apiS.className = `api-status ${state.lastError ? "error" : "ok"}`;
 }
 
-// ---------- Panel de alertas ----------
 function renderAlertsPanel() {
   const list = document.getElementById("alerts-list");
   const empty = document.getElementById("alerts-empty");
@@ -321,9 +308,8 @@ function renderAlertsPanel() {
     const p = state.pacientesCache.find((x) => x.id === a.paciente_id);
     const li = document.createElement("li");
     li.className = `alert-item ${a.tipo}`;
-    const icon = a.tipo === "rojo" ? "🚨" : "⚠️";
     li.innerHTML = `
-      <div class="alert-name">${icon} ${p?.nombre || "Paciente"}</div>
+      <div class="alert-name">${a.tipo === "rojo" ? "🚨" : "⚠️"} ${p?.nombre || "Paciente"}</div>
       <div class="alert-msg">${a.mensaje}</div>
     `;
     li.addEventListener("click", () => {
@@ -336,7 +322,9 @@ function renderAlertsPanel() {
   });
 }
 
-// ---------- Cargar pacientes ----------
+// ============================================================
+//  CARGA DE DATOS Y CRUD
+// ============================================================
 async function cargarPacientes() {
   try {
     const pacientes = await fetchAllPacientes();
@@ -347,9 +335,8 @@ async function cargarPacientes() {
     sel.innerHTML = "";
 
     if (pacientes.length === 0) {
-      const opt = document.createElement("option");
-      opt.textContent = "Sin pacientes";
-      sel.appendChild(opt);
+      sel.innerHTML = "<option value=''>Sin pacientes</option>";
+      state.paciente = null;
       return;
     }
 
@@ -364,10 +351,8 @@ async function cargarPacientes() {
     const target = stillExists || pacientes[0];
     sel.value = target.id;
     state.paciente = target;
-
     state.lastError = null;
   } catch (e) {
-    console.error("cargarPacientes:", e);
     state.lastError = e.message;
   }
 }
@@ -381,26 +366,101 @@ document.getElementById("patient-select").addEventListener("change", (e) => {
   }
 });
 
-document.getElementById("sound-toggle").addEventListener("click", () => {
-  initAudioContext();
-  audio.enabled = !audio.enabled;
+// Agregar Paciente
+document.getElementById("btn-add-patient").addEventListener("click", () => {
+  document.getElementById("modal-add-patient").classList.remove("hidden");
+});
+document.getElementById("btn-close-modal").addEventListener("click", () => {
+  document.getElementById("modal-add-patient").classList.add("hidden");
+});
 
-  const btn = document.getElementById("sound-toggle");
-  btn.classList.toggle("on", audio.enabled);
-  btn.title = audio.enabled
-    ? "Sonido activado · clic para silenciar"
-    : "Activar sonido de alertas";
-  btn.setAttribute(
-    "aria-label",
-    audio.enabled ? "Silenciar alertas" : "Activar sonido de alertas"
-  );
+document.getElementById("form-add-patient").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = e.target.querySelector("button");
+  btn.textContent = "Guardando...";
+  btn.disabled = true;
 
-  if (audio.enabled) {
-    playTone(660, 0.15, "sine", 0, 0.15);
+  try {
+    const res = await fetch(`${BASE_URL}/pacientes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        nombre: document.getElementById("input-nombre").value,
+        edad: parseInt(document.getElementById("input-edad").value),
+        diagnostico: document.getElementById("input-diagnostico").value || null,
+      })
+    });
+    if (!res.ok) throw new Error("Error en la API");
+    
+    alert("✅ Paciente guardado en Supabase");
+    document.getElementById("form-add-patient").reset();
+    document.getElementById("modal-add-patient").classList.add("hidden");
+    await cargarPacientes();
+    await poll();
+  } catch (err) {
+    alert("❌ Error: " + err.message);
+  } finally {
+    btn.textContent = "Guardar en Supabase";
+    btn.disabled = false;
   }
 });
 
-// ---------- Polling ----------
+// Eliminar Paciente
+document.getElementById("btn-delete-patient").addEventListener("click", async () => {
+  if (!state.paciente) return alert("Selecciona un paciente primero");
+  if (!confirm(`¿Eliminar a ${state.paciente.nombre}? Se borrarán sus signos y alertas de Supabase.`)) return;
+
+  try {
+    const res = await fetch(`${BASE_URL}/pacientes/${state.paciente.id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Error al eliminar");
+    
+    alert("✅ Paciente eliminado de la base de datos.");
+    await cargarPacientes();
+    if (state.paciente) await poll();
+  } catch (err) {
+    alert("❌ Error: " + err.message);
+  }
+});
+
+// Sonido
+document.getElementById("sound-toggle").addEventListener("click", () => {
+  initAudioContext();
+  audio.enabled = !audio.enabled;
+  const btn = document.getElementById("sound-toggle");
+  btn.classList.toggle("on", audio.enabled);
+  if (audio.enabled) playTone(660, 0.15, "sine", 0, 0.15);
+});
+
+// Botón de Análisis Clínico
+document.getElementById("btn-ai-summary").addEventListener("click", async () => {
+  if (!state.paciente) return alert("Selecciona un paciente primero");
+  
+  const btn = document.getElementById("btn-ai-summary");
+  const txt = document.getElementById("ai-summary-text");
+  const originalHtml = btn.innerHTML;
+
+  btn.innerHTML = `<span class="animate-pulse">Generando...</span>`;
+  btn.disabled = true;
+  txt.classList.add("hidden");
+
+  try {
+    const res = await fetch(`${BASE_URL}/ai/resumen/${state.paciente.id}`, { method: "POST" });
+    if (!res.ok) throw new Error("Error en la API");
+    const data = await res.json();
+    txt.textContent = data.resumen;
+    txt.classList.remove("hidden");
+  } catch (e) {
+    txt.textContent = "Hubo un error al conectar con el servicio de análisis.";
+    txt.classList.remove("hidden");
+  } finally {
+    btn.innerHTML = originalHtml;
+    btn.disabled = false;
+  }
+});
+
+// ============================================================
+//  Polling y Animación
+// ============================================================
 async function poll() {
   if (state.paciente) {
     try {
@@ -422,7 +482,6 @@ async function poll() {
       state.ultimoEstado = estado;
       state.lastError = null;
     } catch (e) {
-      console.error("poll signos:", e);
       state.lastError = `signos: ${e.message}`;
     }
   }
@@ -440,9 +499,7 @@ async function poll() {
   updateHUD();
 }
 
-// ---------- Animación ----------
 const clock = new THREE.Clock();
-
 function animate() {
   requestAnimationFrame(animate);
   const delta = clock.getDelta();
@@ -455,7 +512,6 @@ function animate() {
   } else {
     monitor.draw({}, delta, "verde");
   }
-
   renderer.render(scene, camera);
 }
 
@@ -465,42 +521,7 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// ---------- NUEVO: Lógica del botón de Inteligencia Artificial ----------
-document.getElementById("btn-ai-summary").addEventListener("click", async () => {
-  if (!state.paciente) return alert("Selecciona un paciente primero");
-  
-  const btn = document.getElementById("btn-ai-summary");
-  const txt = document.getElementById("ai-summary-text");
-  const originalHtml = btn.innerHTML;
-
-  btn.innerHTML = `<span class="animate-pulse">Generando análisis...</span>`;
-  btn.disabled = true;
-  txt.classList.add("hidden");
-
-  try {
-    const baseUrl = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" 
-      ? "http://127.0.0.1:8000" 
-      : "https://telemetria-iot-api.onrender.com";
-
-    const res = await fetch(`${baseUrl}/ai/resumen/${state.paciente.id}`, {
-      method: "POST"
-    });
-    
-    if (!res.ok) throw new Error("Error en la API");
-    const data = await res.json();
-    
-    txt.textContent = data.resumen;
-    txt.classList.remove("hidden");
-  } catch (e) {
-    txt.textContent = "Hubo un error al conectar con el servicio de IA.";
-    txt.classList.remove("hidden");
-  } finally {
-    btn.innerHTML = originalHtml;
-    btn.disabled = false;
-  }
-});
-
-// ---------- Arranque ----------
+// Arranque
 (async () => {
   await cargarPacientes();
   await poll();

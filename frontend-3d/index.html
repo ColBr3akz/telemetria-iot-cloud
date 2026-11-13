@@ -9,9 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   
-  <!-- NUEVO: Tailwind CSS vía CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
-  
   <link rel="stylesheet" href="styles.css" />
 
   <script type="importmap">
@@ -46,18 +44,12 @@
         </div>
       </div>
       <div class="header-actions">
-        <!-- Botón de sonido -->
         <button id="sound-toggle" class="sound-toggle" title="Activar sonido de alertas" aria-label="Activar sonido de alertas">
           <svg class="icon-bell-off" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            <path d="M18.63 13A17.89 17.89 0 0 1 18 8" />
-            <path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14" />
-            <path d="M18 8a6 6 0 0 0-9.33-5" />
-            <line x1="1" y1="1" x2="23" y2="23" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" /><path d="M18.63 13A17.89 17.89 0 0 1 18 8" /><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14" /><path d="M18 8a6 6 0 0 0-9.33-5" /><line x1="1" y1="1" x2="23" y2="23" />
           </svg>
           <svg class="icon-bell-on" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
         </button>
         <p id="api-status" class="api-status">Conectando…</p>
@@ -74,7 +66,13 @@
     </section>
 
     <section class="patient-block">
-      <label class="field-label" for="patient-select">Paciente en foco</label>
+      <div class="flex justify-between items-center mb-2">
+        <label class="field-label m-0" for="patient-select">Paciente en foco</label>
+        <div class="flex gap-1">
+          <button id="btn-add-patient" class="text-[10px] font-bold px-2 py-1 rounded bg-green-500/20 text-green-400 hover:bg-green-500/30 transition">+ Nuevo</button>
+          <button id="btn-delete-patient" class="text-[10px] font-bold px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition">Eliminar</button>
+        </div>
+      </div>
       <select id="patient-select"></select>
       <h2 id="patient-name">—</h2>
       <p id="patient-diagnostico" class="diagnostico">—</p>
@@ -99,19 +97,23 @@
       </div>
     </section>
 
-    <!-- NUEVO: Tarjeta de Inteligencia Artificial (Tailwind CSS) -->
+    <!-- Análisis Clínico (Sin IA ni Astra) -->
     <section class="mt-4 p-4 rounded-xl border border-white/10 bg-white/5">
       <div class="flex items-center justify-between mb-2">
-        <h3 class="text-xs font-bold tracking-wider text-blue-400 uppercase">Análisis Clínico IA</h3>
-        <span class="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full font-semibold">Astra</span>
+        <h3 class="text-xs font-bold tracking-wider text-blue-400 uppercase">Análisis Clínico</h3>
       </div>
       <button id="btn-ai-summary" class="w-full py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-500/20">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
-        </svg>
-        Generar Resumen
+        Generar Análisis
       </button>
       <p id="ai-summary-text" class="mt-3 text-xs text-gray-400 leading-relaxed hidden"></p>
+    </section>
+
+    <!-- NUEVO: Historial de Sesión -->
+    <section class="mt-4 p-4 rounded-xl border border-white/10 bg-white/5">
+      <h3 class="text-[10px] font-bold tracking-wider text-gray-400 uppercase mb-2">Historial de Alertas (Sesión)</h3>
+      <ul id="session-history-list" class="text-xs space-y-2 max-h-32 overflow-y-auto pr-1 text-gray-300">
+        <li class="text-gray-500 italic text-[10px]">Esperando eventos...</li>
+      </ul>
     </section>
 
     <section class="status-card">
@@ -124,6 +126,20 @@
   </aside>
 
   <div id="toast-container"></div>
+
+  <!-- MODAL PARA AGREGAR PACIENTE -->
+  <div id="modal-add-patient" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="bg-[#0d1117] border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
+      <button id="btn-close-modal" class="absolute top-4 right-4 text-gray-400 hover:text-white">✕</button>
+      <h2 class="text-lg font-bold text-white mb-4">Registrar Paciente</h2>
+      <form id="form-add-patient" class="space-y-3">
+        <input type="text" id="input-nombre" placeholder="Nombre Completo" required class="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white">
+        <input type="number" id="input-edad" placeholder="Edad" required class="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white">
+        <input type="text" id="input-diagnostico" placeholder="Diagnóstico" class="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white">
+        <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded-lg text-sm mt-2">Guardar en Supabase</button>
+      </form>
+    </div>
+  </div>
 
   <script type="module" src="js/main.js"></script>
 </body>
