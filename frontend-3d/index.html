@@ -7,8 +7,8 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="styles.css" />
 
@@ -31,6 +31,8 @@
   </div>
 
   <aside id="hud">
+
+    <!-- ===== HEADER ===== -->
     <header class="hud-header">
       <div class="brand">
         <div class="brand-icon">
@@ -38,7 +40,7 @@
             <path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" /><path d="m3 7 9 5 9-5M12 12v10" />
           </svg>
         </div>
-        <div>
+        <div class="brand-text">
           <h1>Simulación 3D</h1>
           <p class="subtitle">Monitoreo de pacientes · Domicilio</p>
         </div>
@@ -56,66 +58,119 @@
       </div>
     </header>
 
+    <!-- ===== ALERTAS ===== -->
     <section class="card alerts-card">
       <div class="card-head">
-        <h3>Requieren supervisión</h3>
+        <div class="card-title danger">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" /><path d="M12 9v4M12 17h.01" />
+          </svg>
+          <h3>Requieren supervisión</h3>
+        </div>
         <span id="alerts-count" class="badge">0</span>
       </div>
       <p id="alerts-empty" class="alerts-empty">✓ Todos los pacientes estables</p>
       <ul id="alerts-list"></ul>
     </section>
 
+    <!-- ===== PACIENTE ===== -->
     <section class="patient-block">
-      <div class="flex justify-between items-center mb-2">
-        <label class="field-label m-0" for="patient-select">Paciente en foco</label>
-        <div class="flex gap-1">
-          <button id="btn-add-patient" class="text-[10px] font-bold px-2 py-1 rounded bg-green-500/20 text-green-400 hover:bg-green-500/30 transition">+ Nuevo</button>
-          <button id="btn-delete-patient" class="text-[10px] font-bold px-2 py-1 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 transition">Eliminar</button>
+      <div class="patient-toolbar">
+        <label class="field-label" for="patient-select">Paciente en foco</label>
+        <div class="toolbar-actions">
+          <button id="btn-add-patient" class="btn-chip add" type="button">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
+            Nuevo
+          </button>
+          <button id="btn-delete-patient" class="btn-chip del" type="button">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14" /></svg>
+            Eliminar
+          </button>
         </div>
       </div>
       <select id="patient-select"></select>
-      <h2 id="patient-name">—</h2>
-      <p id="patient-diagnostico" class="diagnostico">—</p>
+      <div class="patient-info">
+        <h2 id="patient-name">—</h2>
+        <p id="patient-diagnostico" class="diagnostico">—</p>
+      </div>
     </section>
 
+    <!-- ===== SIGNOS VITALES ===== -->
     <section class="vitals">
-      <div class="vital">
-        <div class="vital-top"><span class="vital-label">SpO₂</span><span id="spo2-pill" class="pill">--</span></div>
+      <div class="vital v-spo2">
+        <div class="vital-top">
+          <span class="vital-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7s6 6.3 6 11.3a6 6 0 0 1-12 0c0-5 6-11.3 6-11.3Z" /></svg>
+            SpO₂
+          </span>
+          <span id="spo2-pill" class="pill">--</span>
+        </div>
         <div class="vital-main"><span id="spo2" class="vital-value">--</span><span class="vital-unit">%</span></div>
       </div>
-      <div class="vital">
-        <div class="vital-top"><span class="vital-label">Frec. cardíaca</span><span id="fc-pill" class="pill">--</span></div>
+
+      <div class="vital v-fc">
+        <div class="vital-top">
+          <span class="vital-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 5.6a5.5 5.5 0 0 0-7.8 0L12 6.6l-1-1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-7.6a5.5 5.5 0 0 0 0-7.8Z" /></svg>
+            Frec. cardíaca
+          </span>
+          <span id="fc-pill" class="pill">--</span>
+        </div>
         <div class="vital-main"><span id="fc" class="vital-value">--</span><span class="vital-unit">bpm</span></div>
       </div>
-      <div class="vital">
-        <div class="vital-top"><span class="vital-label">Frec. respiratoria</span><span id="fr-pill" class="pill">--</span></div>
+
+      <div class="vital v-fr">
+        <div class="vital-top">
+          <span class="vital-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-6 4 12 2-6h6" /></svg>
+            Frec. respiratoria
+          </span>
+          <span id="fr-pill" class="pill">--</span>
+        </div>
         <div class="vital-main"><span id="fr" class="vital-value">--</span><span class="vital-unit">rpm</span></div>
       </div>
-      <div class="vital">
-        <div class="vital-top"><span class="vital-label">Temperatura</span><span id="temp-pill" class="pill">--</span></div>
+
+      <div class="vital v-temp">
+        <div class="vital-top">
+          <span class="vital-label">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 14.8V4a2 2 0 0 0-4 0v10.8a4 4 0 1 0 4 0Z" /></svg>
+            Temperatura
+          </span>
+          <span id="temp-pill" class="pill">--</span>
+        </div>
         <div class="vital-main"><span id="temp" class="vital-value">--</span><span class="vital-unit">°C</span></div>
       </div>
     </section>
 
-    <!-- Análisis Clínico (Sin IA ni Astra) -->
-    <section class="mt-4 p-4 rounded-xl border border-white/10 bg-white/5">
-      <div class="flex items-center justify-between mb-2">
-        <h3 class="text-xs font-bold tracking-wider text-blue-400 uppercase">Análisis Clínico</h3>
+    <!-- ===== ANÁLISIS CLÍNICO ===== -->
+    <section class="card analysis-card">
+      <div class="card-head">
+        <div class="card-title info">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9V3" /><path d="M7.5 15h9" /></svg>
+          <h3>Análisis Clínico</h3>
+        </div>
       </div>
-      <button id="btn-ai-summary" class="w-full py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-500/20">
+      <button id="btn-ai-summary" class="btn-primary" type="button">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z" /><path d="M9 13h6M9 17h4" /></svg>
         Generar Análisis
       </button>
-      <p id="ai-summary-text" class="mt-3 text-xs text-gray-400 leading-relaxed hidden"></p>
+      <p id="ai-summary-text" class="analysis-text hidden"></p>
     </section>
 
-    <!-- NUEVO: Historial de Sesión -->
-    <section class="mt-4 p-4 rounded-xl border border-white/10 bg-white/5">
-      <h3 class="text-[10px] font-bold tracking-wider text-gray-400 uppercase mb-2">Historial de Alertas (Sesión)</h3>
-      <ul id="session-history-list" class="text-xs space-y-2 max-h-32 overflow-y-auto pr-1 text-gray-300">
-        <li class="text-gray-500 italic text-[10px]">Esperando eventos...</li>
+    <!-- ===== HISTORIAL ===== -->
+    <section class="card history-card">
+      <div class="card-head">
+        <div class="card-title muted">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+          <h3>Historial de Alertas (Sesión)</h3>
+        </div>
+      </div>
+      <ul id="session-history-list" class="history-list">
+        <li class="history-empty">Esperando eventos...</li>
       </ul>
     </section>
 
+    <!-- ===== ESTADO GENERAL ===== -->
     <section class="status-card">
       <div class="status-info">
         <span class="status-title">Estado general</span>
@@ -127,16 +182,35 @@
 
   <div id="toast-container"></div>
 
-  <!-- MODAL PARA AGREGAR PACIENTE -->
-  <div id="modal-add-patient" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center hidden">
-    <div class="bg-[#0d1117] border border-white/10 rounded-2xl p-6 w-full max-w-sm shadow-2xl relative">
-      <button id="btn-close-modal" class="absolute top-4 right-4 text-gray-400 hover:text-white">✕</button>
-      <h2 class="text-lg font-bold text-white mb-4">Registrar Paciente</h2>
-      <form id="form-add-patient" class="space-y-3">
-        <input type="text" id="input-nombre" placeholder="Nombre Completo" required class="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white">
-        <input type="number" id="input-edad" placeholder="Edad" required class="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white">
-        <input type="text" id="input-diagnostico" placeholder="Diagnóstico" class="w-full bg-white/5 border border-white/10 rounded-lg p-2 text-sm text-white">
-        <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-2 rounded-lg text-sm mt-2">Guardar en Supabase</button>
+  <!-- ===== MODAL: REGISTRAR PACIENTE ===== -->
+  <div id="modal-add-patient" class="modal-overlay hidden">
+    <div class="modal-card">
+      <button id="btn-close-modal" class="modal-close" type="button" aria-label="Cerrar">✕</button>
+
+      <div class="modal-head">
+        <div class="modal-icon">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6M22 11h-6" /></svg>
+        </div>
+        <div>
+          <h2>Registrar Paciente</h2>
+          <p>Se guardará en la base de datos</p>
+        </div>
+      </div>
+
+      <form id="form-add-patient" class="modal-form">
+        <div class="field">
+          <label for="input-nombre">Nombre completo</label>
+          <input type="text" id="input-nombre" placeholder="Ej. María Fernández" required />
+        </div>
+        <div class="field">
+          <label for="input-edad">Edad</label>
+          <input type="number" id="input-edad" placeholder="Ej. 45" required />
+        </div>
+        <div class="field">
+          <label for="input-diagnostico">Diagnóstico <span class="optional">(opcional)</span></label>
+          <input type="text" id="input-diagnostico" placeholder="Ej. Neumonía leve" />
+        </div>
+        <button type="submit" class="btn-submit">Guardar en Supabase</button>
       </form>
     </div>
   </div>
